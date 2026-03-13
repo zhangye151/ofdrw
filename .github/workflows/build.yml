@@ -1,16 +1,14 @@
-name: Build OFDRW JAR 2026
+name: OFDRW_Direct_Build_2026
 
 on:
   workflow_dispatch: # 允许你手动点击按钮触发
 
 env:
-  # 解决 Node.js 20 弃用警告
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # 解决 Node 20 警告
 
 jobs:
-  build:
+  build-and-collect:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -22,17 +20,24 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Build with Maven
-        # package 命令会编译并生成 jar 包
-        run: mvn clean package -DskipTests
+      - name: Build and Copy Dependencies
+        # 这一步不仅编译，还会把所有第三方依赖包(PDFBox等)全部导出到 dependency 目录
+        run: |
+          mvn clean package -DskipTests
+          mvn dependency:copy-dependencies -DoutputDirectory=all_lib/dependencies
 
-      - name: Upload Artifact
+      - name: Collect All OFDRW JARs
+        # 这一步把各个子模块生成的 OFDRW 自己的 JAR 包也收集过来
+        run: |
+          mkdir -p all_lib/ofdrw_modules
+          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/all_lib/*" -exec cp {} all_lib/ofdrw_modules/ \;
+          echo "Checking collected files:"
+          ls -R all_lib/
+
+      - name: Upload Final Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ofdrw-all-modules
-          # 关键修改：使用递归通配符找到所有子模块 target 里的 jar
-          path: "**/target/*.jar"
-          # 排除源码包和文档包，只拿运行包（可选，如果不介意文件多可以删掉这两行）
-          # exclude: |
-          #   **/target/*-sources.jar
-          #   **/target/*-javadoc.jar
+          name: OFDRW_Full_Package_2026
+          # 核心修改：直接上传整个 all_lib 文件夹
+          path: all_lib/
+          if-no-files-found: error
