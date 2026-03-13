@@ -1,41 +1,63 @@
-name: OFDRW_Final_Collector_2026
+name: OFDRW_Double_Build_2026
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch: # 手动触发
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
+  # 任务一：只收集 OFDRW 核心组件
+  build_core_only:
+    name: Build Pure OFDRW Jars
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '8'
           distribution: 'temurin'
           cache: 'maven'
+      
+      - name: Compile
+        run: mvn clean package -DskipTests
 
-      - name: Build and Copy Dependencies
-        # 这一步是灵魂：除了编译，还让 Maven 把所有依赖包（PDFBox等）全部导出
+      - name: Collect Core
         run: |
-          mvn clean package -DskipTests
-          mvn dependency:copy-dependencies -DoutputDirectory=my_delivery/lib
-
-      - name: Collect OFDRW Jars
-        # 搜刮 OFDRW 自己生成的模块包
-        run: |
-          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/my_delivery/*" -exec cp {} ./my_delivery/ \;
-          echo "--- 文件准备就绪 ---"
-          ls -R ./my_delivery/
-
-      - name: Upload Everything
+          mkdir -p pure_jars
+          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -exec cp {} pure_jars/ \;
+      
+      - name: Upload Pure
         uses: actions/upload-artifact@v4
         with:
-          name: OFDRW_WEB_READY_PACK
-          path: my_delivery/
-          if-no-files-found: error
+          name: 1-OFDRW-Core-Only (Small)
+          path: pure_jars/
+
+  # 任务二：收集 OFDRW + 所有第三方依赖 (Web项目最推荐)
+  build_with_dependencies:
+    name: Build Full Bundle (Web Ready)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Compile and Extract Deps
+        run: |
+          mvn clean package -DskipTests
+          # 把所有依赖包导出到 dependency 文件夹
+          mvn dependency:copy-dependencies -DoutputDirectory=full_bundle/dependencies
+
+      - name: Collect All
+        run: |
+          # 收集 OFDRW 自己的包
+          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/full_bundle/*" -exec cp {} full_bundle/ \;
+      
+      - name: Upload Full
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2-OFDRW-Full-Bundle (Large-Web-Ready)
+          path: full_bundle/
