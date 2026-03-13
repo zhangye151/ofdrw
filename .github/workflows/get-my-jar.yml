@@ -1,4 +1,4 @@
-name: OFDRW_Double_Build_2026
+name: Build_OFDRW_Fat_Jar_2026
 
 on:
   workflow_dispatch: 
@@ -7,60 +7,41 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # 任务一：纯净版 (既然你已经成功了，可以保留也可以删掉)
-  build_core_only:
-    name: Build Pure OFDRW Jars
+  build-fat-jar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
         with:
           java-version: '8'
           distribution: 'temurin'
-      - name: Compile
-        run: mvn clean package -DskipTests
-      - name: Collect
+
+      - name: Build Fat Jar
+        # 我们直接对 ofdrw-full 模块进行打包，并包含所有依赖
         run: |
-          mkdir -p pure_jars
-          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -exec cp {} pure_jars/ \;
-      - name: Upload
+          mvn clean package -DskipTests -pl ofdrw-full -am \
+          -Dmaven.test.skip=true \
+          -Dshade.createDependencyReducedPom=false
+          
+          # 进入 ofdrw-full 目录尝试寻找生成的 big jar
+          # 如果官方 pom 没写 shader，我们用 dependency:copy 把所有包弄到一个目录再用 jar 命令压在一起
+          mkdir -p combined
+          mvn dependency:copy-dependencies -DoutputDirectory=combined -pl ofdrw-full -am -DincludeScope=runtime
+          cp ofdrw-full/target/ofdrw-full-*.jar combined/
+          
+          # 暴力合并：把所有 jar 包解压到一个地方，再打成一个大包
+          mkdir -p fat_contents
+          cd combined
+          for f in *.jar; do unzip -o $f -d ../fat_contents/; done
+          cd ../fat_contents
+          # 移除签名文件防止冲突
+          rm -rf META-INF/*.SF META-INF/*.DSA META-INF/*.RSA
+          jar -cvf ../OFDRW-All-In-One.jar .
+
+      - name: Upload Fat Jar
         uses: actions/upload-artifact@v4
         with:
-          name: 1-OFDRW-Core-Only
-          path: pure_jars/
-
-  # 任务二：全家桶版 (针对失败进行的修复)
-  build_with_dependencies:
-    name: Build Full Bundle (Web Ready)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '8'
-          distribution: 'temurin'
-          cache: 'maven'
-      
-      - name: Compile
-        run: mvn clean package -DskipTests
-
-      - name: Force Export Dependencies
-        # 即使某个模块导出失败也继续执行
-        run: |
-          mkdir -p all_in_one_bundle
-          mvn dependency:copy-dependencies -DoutputDirectory=all_in_one_bundle -DincludeScope=runtime || true
-
-      - name: Collect OFDRW Modules
-        # 把核心包也抓进同一个文件夹
-        run: |
-          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/all_in_one_bundle/*" -exec cp {} all_in_one_bundle/ \;
-          echo "Checking total files count:"
-          ls -1 all_in_one_bundle | wc -l
-
-      - name: Upload Full
-        uses: actions/upload-artifact@v4
-        with:
-          name: 2-OFDRW-Full-Bundle-Fixed
-          # 指向这个确定的文件夹
-          path: all_in_one_bundle/
-          if-no-files-found: error
+          name: OFDRW-Single-Jar-2026
+          path: OFDRW-All-In-One.jar
