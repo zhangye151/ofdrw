@@ -1,4 +1,4 @@
-name: Build_OFDRW_Success_Version
+name: OFDRW_Final_Collector_2026
 
 on:
   workflow_dispatch: 
@@ -20,22 +20,22 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Maven Build
-        # 执行编译
-        run: mvn clean package -DskipTests
-
-      - name: Collect Files Forcefully
-        # 这一步是关键：创建一个新文件夹，把所有子模块 target 里的 jar 都抓过来
+      - name: Build and Copy Dependencies
+        # 这一步是灵魂：除了编译，还让 Maven 把所有依赖包（PDFBox等）全部导出
         run: |
-          mkdir -p my_delivery
-          find . -name "*.jar" -not -path "*/test-classes/*" -exec cp {} ./my_delivery/ \;
-          echo "--- 确认抓取到的文件列表 ---"
-          ls -lh ./my_delivery/
+          mvn clean package -DskipTests
+          mvn dependency:copy-dependencies -DoutputDirectory=my_delivery/lib
 
-      - name: Upload Artifact
+      - name: Collect OFDRW Jars
+        # 搜刮 OFDRW 自己生成的模块包
+        run: |
+          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/my_delivery/*" -exec cp {} ./my_delivery/ \;
+          echo "--- 文件准备就绪 ---"
+          ls -R ./my_delivery/
+
+      - name: Upload Everything
         uses: actions/upload-artifact@v4
         with:
-          name: ofdrw-jar-package-2026
-          # 注意：这里的 path 指向我们刚才手动创建并填满的文件夹
+          name: OFDRW_WEB_READY_PACK
           path: my_delivery/
           if-no-files-found: error
