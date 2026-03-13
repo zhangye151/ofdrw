@@ -1,18 +1,17 @@
-name: Release to Maven Central
+name: Build_OFDRW_Success_Version
 
 on:
-  push:
-    branches: [ master, main ]
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up JDK 8
@@ -20,14 +19,25 @@ jobs:
         with:
           java-version: '8'
           distribution: 'temurin'
+          cache: 'maven'
 
-      - name: Build Project
+      - name: Maven Build
+        run: mvn -B clean package -DskipTests
+
+      - name: Collect jar files
         run: |
-          mvn clean package -DskipTests -B
+          mkdir -p my_delivery
+          find . -type f -name "*.jar" \
+            ! -name "*sources.jar" \
+            ! -name "*javadoc.jar" \
+            ! -path "*/test/*" \
+            -exec cp {} my_delivery/ \;
 
-      - name: Upload Build Artifacts
+          echo "===== JAR FILE LIST ====="
+          ls -lh my_delivery
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jar-files
-          path: target/*.jar
-          retention-days: 7
+          name: ofdrw-jar-package
+          path: my_delivery/
