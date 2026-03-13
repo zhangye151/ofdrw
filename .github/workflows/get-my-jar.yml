@@ -1,4 +1,4 @@
-name: Build_OFDRW_Fat_Jar_2026
+name: OFDRW_Standard_Lib_2026
 
 on:
   workflow_dispatch: 
@@ -7,41 +7,32 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build-fat-jar:
+  collect-all-jars:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Build Fat Jar
-        # 我们直接对 ofdrw-full 模块进行打包，并包含所有依赖
+      - name: Build and Export All
         run: |
-          mvn clean package -DskipTests -pl ofdrw-full -am \
-          -Dmaven.test.skip=true \
-          -Dshade.createDependencyReducedPom=false
+          # 1. 编译全模块
+          mvn clean package -DskipTests
           
-          # 进入 ofdrw-full 目录尝试寻找生成的 big jar
-          # 如果官方 pom 没写 shader，我们用 dependency:copy 把所有包弄到一个目录再用 jar 命令压在一起
-          mkdir -p combined
-          mvn dependency:copy-dependencies -DoutputDirectory=combined -pl ofdrw-full -am -DincludeScope=runtime
-          cp ofdrw-full/target/ofdrw-full-*.jar combined/
+          # 2. 创建一个存放所有包的目录
+          mkdir -p web_lib
           
-          # 暴力合并：把所有 jar 包解压到一个地方，再打成一个大包
-          mkdir -p fat_contents
-          cd combined
-          for f in *.jar; do unzip -o $f -d ../fat_contents/; done
-          cd ../fat_contents
-          # 移除签名文件防止冲突
-          rm -rf META-INF/*.SF META-INF/*.DSA META-INF/*.RSA
-          jar -cvf ../OFDRW-All-In-One.jar .
+          # 3. 核心步骤：进入 converter 模块（这是转 PDF 的核心）导出它及其所有依赖
+          # 这步会把 PDFBox, BouncyCastle 等全部抓出来
+          mvn dependency:copy-dependencies -DoutputDirectory=../../web_lib -pl ofdrw-converter -am -DincludeScope=runtime
+          
+          # 4. 把编译好的 ofdrw 各个模块也拷贝进去
+          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/web_lib/*" -exec cp {} ./web_lib/ \;
 
-      - name: Upload Fat Jar
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: OFDRW-Single-Jar-2026
-          path: OFDRW-All-In-One.jar
+          name: OFDRW_Lib_For_Web
+          path: web_lib/
