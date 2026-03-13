@@ -27,8 +27,10 @@ jobs:
         run: mvn clean package -DskipTests
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ofdrw-all-jars
-          # 修改路径匹配模式，确保抓取到所有子模块生成的 jar
-          path: "**/target/*.jar"
+              uses: actions/upload-artifact@v4
+              with:
+                name: ofdrw-all-jars
+                # 使用 **/ 匹配所有子目录下的 target 文件夹
+                path: "**/target/*.jar"
+                # 如果只想保留主 JAR，排除那些源码包或文档包（可选）
+                if-no-files-found: error
