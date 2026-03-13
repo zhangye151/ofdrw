@@ -1,13 +1,10 @@
-name: OFDRW_Standard_Lib_2026
+name: Build_OFDRW_Command_Tool
 
 on:
   workflow_dispatch: 
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  collect-all-jars:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,23 +13,19 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Build and Export All
+      - name: Build Tool with Dependencies
+        # 这一步进入 tool 模块，并打出一个包含所有依赖的 jar (Fat Jar)
         run: |
-          # 1. 编译全模块
-          mvn clean package -DskipTests
+          mvn clean package -DskipTests -pl ofdrw-tool -am
           
-          # 2. 创建一个存放所有包的目录
-          mkdir -p web_lib
-          
-          # 3. 核心步骤：进入 converter 模块（这是转 PDF 的核心）导出它及其所有依赖
-          # 这步会把 PDFBox, BouncyCastle 等全部抓出来
-          mvn dependency:copy-dependencies -DoutputDirectory=../../web_lib -pl ofdrw-converter -am -DincludeScope=runtime
-          
-          # 4. 把编译好的 ofdrw 各个模块也拷贝进去
-          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/web_lib/*" -exec cp {} ./web_lib/ \;
+      - name: Collect Result
+        run: |
+          # 找到那个体积最大的、名字带 with-dependencies 的包
+          mkdir output
+          cp ofdrw-tool/target/*-with-dependencies.jar output/ofdrw-command.jar
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: OFDRW_Lib_For_Web
-          path: web_lib/
+          name: OFDRW-Executable-Tool
+          path: output/ofdrw-command.jar
