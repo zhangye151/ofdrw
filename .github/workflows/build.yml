@@ -1,16 +1,18 @@
-name: OFDRW_Direct_Build_2026
+name: Release to Maven Central
 
 on:
-  workflow_dispatch: # 允许你手动点击按钮触发
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # 解决 Node 20 警告
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
 
 jobs:
-  build-and-collect:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up JDK 8
@@ -18,26 +20,14 @@ jobs:
         with:
           java-version: '8'
           distribution: 'temurin'
-          cache: 'maven'
 
-      - name: Build and Copy Dependencies
-        # 这一步不仅编译，还会把所有第三方依赖包(PDFBox等)全部导出到 dependency 目录
+      - name: Build Project
         run: |
-          mvn clean package -DskipTests
-          mvn dependency:copy-dependencies -DoutputDirectory=all_lib/dependencies
+          mvn clean package -DskipTests -B
 
-      - name: Collect All OFDRW JARs
-        # 这一步把各个子模块生成的 OFDRW 自己的 JAR 包也收集过来
-        run: |
-          mkdir -p all_lib/ofdrw_modules
-          find . -name "ofdrw-*.jar" -not -path "*/test-classes/*" -not -path "*/all_lib/*" -exec cp {} all_lib/ofdrw_modules/ \;
-          echo "Checking collected files:"
-          ls -R all_lib/
-
-      - name: Upload Final Artifact
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: OFDRW_Full_Package_2026
-          # 核心修改：直接上传整个 all_lib 文件夹
-          path: all_lib/
-          if-no-files-found: error
+          name: jar-files
+          path: target/*.jar
+          retention-days: 7
