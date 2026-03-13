@@ -1,18 +1,16 @@
-name: Release to Maven Central
+name: Build_OFDRW_Success_Version
 
 on:
-  push:
-    branches: [ master, main ]
-  workflow_dispatch:
+  workflow_dispatch: 
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up JDK 8
@@ -20,14 +18,24 @@ jobs:
         with:
           java-version: '8'
           distribution: 'temurin'
+          cache: 'maven'
 
-      - name: Build Project
+      - name: Maven Build
+        # 执行编译
+        run: mvn clean package -DskipTests
+
+      - name: Collect Files Forcefully
+        # 这一步是关键：创建一个新文件夹，把所有子模块 target 里的 jar 都抓过来
         run: |
-          mvn clean package -DskipTests -B
+          mkdir -p my_delivery
+          find . -name "*.jar" -not -path "*/test-classes/*" -exec cp {} ./my_delivery/ \;
+          echo "--- 确认抓取到的文件列表 ---"
+          ls -lh ./my_delivery/
 
-      - name: Upload Build Artifacts
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jar-files
-          path: target/*.jar
-          retention-days: 7
+          name: ofdrw-jar-package-2026
+          # 注意：这里的 path 指向我们刚才手动创建并填满的文件夹
+          path: my_delivery/
+          if-no-files-found: error
