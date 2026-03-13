@@ -1,10 +1,10 @@
-name: Build OFDRW JAR (Node 24 Ready)
+name: Build OFDRW JAR 2026
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch: # 允许你手动点击按钮触发
 
 env:
-  # 解决你遇到的警告：强制 Action 使用 Node.js 24 运行
+  # 解决 Node.js 20 弃用警告
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4 # 即使版本号没变，设置了 env 也会在 Node 24 下运行
+        uses: actions/checkout@v4
 
       - name: Set up JDK 8
         uses: actions/setup-java@v4
@@ -23,14 +23,16 @@ jobs:
           cache: 'maven'
 
       - name: Build with Maven
-        # clean package 会在每个模块的 target 下生成 JAR
+        # package 命令会编译并生成 jar 包
         run: mvn clean package -DskipTests
 
       - name: Upload Artifact
-              uses: actions/upload-artifact@v4
-              with:
-                name: ofdrw-all-jars
-                # 使用 **/ 匹配所有子目录下的 target 文件夹
-                path: "**/target/*.jar"
-                # 如果只想保留主 JAR，排除那些源码包或文档包（可选）
-                if-no-files-found: error
+        uses: actions/upload-artifact@v4
+        with:
+          name: ofdrw-all-modules
+          # 关键修改：使用递归通配符找到所有子模块 target 里的 jar
+          path: "**/target/*.jar"
+          # 排除源码包和文档包，只拿运行包（可选，如果不介意文件多可以删掉这两行）
+          # exclude: |
+          #   **/target/*-sources.jar
+          #   **/target/*-javadoc.jar
